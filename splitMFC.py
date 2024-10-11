@@ -1,5 +1,6 @@
 
 import argparse, random
+import praatmfc as MFC
 
 parser = argparse.ArgumentParser(description='Split a Praat MFC script into scripts that will play smaller subsets of the clips')
 parser.add_argument('--mfc', default='[none listed]', help='your MFC script')
@@ -17,39 +18,10 @@ print('########################################')
 	
 max_per_script = int(args.max)
 
-with open(args.mfc) as f:
-	big_script_lines = f.readlines()
-
-top_of_script = []
-bottom_of_script = []
-stimuli = []
-reached_stimuli = False
-finished_stimuli = False
-
-for line in big_script_lines:
-
-	if line.startswith("numberOfDifferentStimuli"):
-		reached_stimuli = True
-		stated_number_of_stimuli = int(line.split('=')[1])
-
-	elif line.startswith("numberOfReplicationsPerStimulus"):
-		finished_stimuli = True
-
-	if reached_stimuli == False:
-		top_of_script.append(line)
-	elif finished_stimuli:
-		bottom_of_script.append(line)
-	elif not line.startswith("numberOfDifferentStimuli"):
-		stimuli.append(line)
-
-actual_number_of_stimuli = len(stimuli)
-
-if stated_number_of_stimuli != actual_number_of_stimuli:
-	print('WARNING: script says', stated_number_of_stimuli, 'but lists', actual_number_of_stimuli)
+[top_of_script, bottom_of_script, stimuli] = MFC.readscript(args.mfc)
 
 if args.shuffle == "True":
 	random.shuffle(stimuli)
-
 
 output_basename = args.mfc.replace('.praat','')
 
@@ -70,15 +42,7 @@ if args.word == 'True':
 
 	for stimulus_name in stimulus_sets.keys():
 		output_name = output_basename + '_' + stimulus_name + '.praat' 
-		with open(output_name, 'w') as f:
-			for line in top_of_script:
-				f.write(line)
-			f.write('numberOfDifferentStimuli = '+str(len(stimulus_sets[stimulus_name]))+'\n')
-			for stim in stimulus_sets[stimulus_name]:
-				f.write(stim)
-			for line in bottom_of_script:
-				f.write(line)
-		print('wrote', output_name, 'with', len(stimulus_sets[stimulus_name]), 'clips')
+		MFC.writescript(output_name, top_of_script, bottom_of_script, stimulus_sets[stimulus_name])
 
 else:
 
@@ -105,14 +69,6 @@ else:
 
 		for stimulus_name in stimulus_sets.keys():
 			output_name = output_basename + '_' + stimulus_name + '_of_' + str(len(stimulus_sets.keys())) + '.praat' 
-			with open(output_name, 'w') as f:
-				for line in top_of_script:
-					f.write(line)
-				f.write('numberOfDifferentStimuli = '+str(len(stimulus_sets[stimulus_name]))+'\n')
-				for stim in stimulus_sets[stimulus_name]:
-					f.write(stim)
-				for line in bottom_of_script:
-					f.write(line)
-			print('wrote', output_name, 'with', len(stimulus_sets[stimulus_name]), 'clips')
+			MFC.writescript(output_name, top_of_script, bottom_of_script, stimulus_sets[stimulus_name])
 
 print('########################################\n')

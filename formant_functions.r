@@ -2733,7 +2733,10 @@ optimize_within_speaker = function(my_data, phone_col='phone', best_bw, best_by_
 
                 my_data[my_data$speaker==sp & my_data[,phone_col]==ph & my_data$total_formants%in%candidates,'new_best_mdist'] = testdata$best_mdist
                 my_data[my_data$speaker==sp & my_data[,phone_col]==ph & !my_data$total_formants%in%candidates,'new_best_mdist'] = 0
-
+            }else{
+                print (paste('fewer than 3 tokens of',ph,'for',sp))
+                my_data[my_data$speaker==sp & my_data[,phone_col]==ph & my_data$total_formants==candidates[ceiling(length(candidates)/2)],'new_best_mdist'] = 1
+                my_data[my_data$speaker==sp & my_data[,phone_col]==ph & !my_data$total_formants==candidates[ceiling(length(candidates)/2)],'new_best_mdist'] = 0
             }
         }
     }
