@@ -790,7 +790,7 @@ procedure trigrams (.argString$)
         select Sound 'sound_name$'
         Extract part... '.trigram_start' '.trigram_end' rectangular 1.0 yes
         timestring$ = replace$ ("'.trigram_start'", ".", "_", 0)
-        if .clip_start == round(.clip_start)
+        if .trigram_start == round(.trigram_start)
             printline 'timestring$'
             timestring$ = timestring$+"_0"
         endif
