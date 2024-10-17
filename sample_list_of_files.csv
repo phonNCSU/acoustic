@@ -1,0 +1,5 @@
+speaker,wav,textgrid
+speaker1,/full_path_to/speaker1_recording.wav,/full_path_to/speaker1_recording.TextGrid
+speaker2,/full_path_to/speaker2_recording1.wav,/full_path_to/speaker2_recording1.TextGrid
+speaker2,/full_path_to/speaker2_recording2.wav,/full_path_to/speaker2_recording2.TextGrid
+speaker3,/full_path_to/speaker3_recording.wav,/full_path_to/speaker3_recording.TextGrid
