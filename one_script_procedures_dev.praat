@@ -790,7 +790,7 @@ procedure trigrams (.argString$)
         select Sound 'sound_name$'
         Extract part... '.trigram_start' '.trigram_end' rectangular 1.0 yes
         timestring$ = replace$ ("'.trigram_start'", ".", "_", 0)
-        if .clip_start == round(.clip_start)
+        if .trigram_start == round(.trigram_start)
             printline 'timestring$'
             timestring$ = timestring$+"_0"
         endif
@@ -1369,9 +1369,30 @@ endproc
 #  - intermediate phrases (often just drop/rise in pitch that isn't otherwise accounted for)
 #
 # EXAMPLE: 'pvi()'
+# EXAMPLE: 'pvi(pauses="um uh")'
 #######################################################################################
 
 procedure pvi (.argString$)
+
+    .pauses$ = ""
+
+    @parseArgs (.argString$)
+    
+    for .i to parseArgs.n_args
+        if parseArgs.var$[.i] == "pauses"
+            .pauses$ = parseArgs.val$[.i]
+            .pauses$ = replace$(.pauses$, " ", ",", 0)
+            .pauses$ = replace$(.pauses$, """", "", 0)
+            .pauses$ = ","+.pauses$+","
+        elif parseArgs.var$[.i] != ""
+            if isHeader == 1
+                .unknown_var$ = parseArgs.var$[.i]
+                printline skipped unknown argument '.unknown_var$'
+            endif
+        endif
+    endfor
+
+    .pvi_breaks$ = breaks$ + .pauses$
 
     if isHeader = 1 
         fileappend 'outfile$' ,nucleus,vowel_duration,nucleus_duration,last_nucleus_duration,pvi,word_duration,n_phones,syllables,feet,stress,last_stress,stress_pattern,final,prepausal
@@ -1381,7 +1402,7 @@ procedure pvi (.argString$)
         .coronals$ = phonefield$
         .last_nucleus_duration = undefined
         .last_stress$ = "--undefined--"
-
+        
     elif isComplete == 1
         printline FINISHED  
     else
@@ -1437,8 +1458,9 @@ procedure pvi (.argString$)
         .n_syllables = length (.stress_pattern$)
 
         .n_feet = length (replace$(.stress_pattern$, "0", "", 0))
-
-        if index(breaks$, ","+transport.nextword$+",") > 0 and (index (.vs_after$, "1") + index (.vs_after$, "2") == 0)
+        #printline '.pvi_breaks$'
+        if index(.pvi_breaks$, ","+transport.nextword$+",") > 0 and (index (.vs_after$, "1") + index (.vs_after$, "2") == 0)
+            #printline found break: 'transport.nextword$'
             .prepausal = 1
         else
             .prepausal = 0
