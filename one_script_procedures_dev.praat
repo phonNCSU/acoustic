@@ -1291,7 +1291,7 @@ procedure annotation_tier (.argString$)
     elif isComplete == 1
         printline FINISHED  
     else
-
+        select TextGrid 'textgrid_name$'
         .phone_mid = transport.phone_start + (transport.duration / 2)
         .tier_number = -1
         .tiers = Get number of tiers
