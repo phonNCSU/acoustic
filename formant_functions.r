@@ -2722,8 +2722,12 @@ optimize_within_speaker = function(my_data, phone_col='phone', best_bw, best_by_
                             message(paste("exiting Mahalanobis procedure"))
                         }
                     )
-
-                    change_rate = sum(testdata$new_best_mdist!=testdata$best_mdist)/length(testdata$best_mdist)
+                    changes_and_nas = testdata$new_best_mdist!=testdata$best_mdist
+                    just_changes = changes_and_nas
+                    just_changes[is.na(just_changes)] = FALSE
+                    # print(just_changes)
+                    # change_rate = sum(testdata$new_best_mdist!=testdata$best_mdist)/length(testdata$best_mdist)
+                    change_rate = sum(just_changes)/length(testdata$best_mdist)
                     print(paste('    iteration',iterations,'changed',round(change_rate,3),'of tokens'))
                     testdata$best_mdist = testdata$new_best_mdist
                     testdata = testdata[,c('token_id',mcols,'best_mdist')]
