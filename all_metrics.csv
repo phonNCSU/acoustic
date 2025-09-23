@@ -1,0 +1,2 @@
+total_formants,max_formant,mdist,residual_energy,sos_geom_mean,validity,mdist_ratio,sos_geom_mean_ratio,r2_f1,r2_f2,r2_f3,r2_f4,r2_f5,energy_ratio,validity_ratio
+3.5,5500,1,0.00013158117469011887,22729266.299580023,0.7058823529411765,1,1,0.6883372533958314,0.6804536268230419,0.4842751792852949,0,0,1,1

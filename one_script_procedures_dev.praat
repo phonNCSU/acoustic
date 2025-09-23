@@ -1971,7 +1971,8 @@ procedure nasalization (.argString$)
         printline FINISHED  
 
     else
-        .ltas_bandwidth = ceiling(sound_samplerate/2048)
+        .ltas_bandwidth = ceiling(sound_samplerate/2048) # changed 2025/09/16
+        .ltas_bandwidth = ceiling(sound_samplerate/1024)
         
         if .lastphone$ == "yes" or .lastphone$ == "true"
             .first_measure = transport.lastphone_start
