@@ -927,10 +927,12 @@ procedure handleWildcards
     phonefield$ = replace$(phonefield$, " LABIODENTAL ", " LABDENT ", 0)
     phonefield$ = replace$(phonefield$, " BILABIAL ", " BILAB ", 0)
     phonefield$ = replace$(phonefield$, " VELAR ", " VEL ", 0)
-
+   
     ###BORA
     phonefield$ = replace$(phonefield$, " BORA_VOWEL ", " a á aá aá áá ɨ ɨ́ ɨ́ɨ́ ɨɨ́ ɯ ɯ́ ɯɯ́ ɯ́ɯ́ e é eé éé i í ií íí o ó oó óó u ú uú úú ɛ ɛ́ ɛɛ́ ɛ́ɛ́ ", 0)
     phonefield$ = replace$(phonefield$, " BORA_CONS ", " p pʲ pʰ pʲʰ t tʲ tʰ tʲʰ k kʲ kʰ kʲʰ k͡p ʔ ʔʲ ts tsʰ tʃ tʃʰ x h hʲ β βʲ m mʲ n ɲ ɾ j ", 0)
+    phonefield$ = replace$(phonefield$, " BORA_PALATALIZED ", " pʲ pʲʰ tʲ tʲʰ kʲ kʲʰ ʔʲ hʲ βʲ mʲ ", 0)
+    phonefield$ = replace$(phonefield$, " BORA_LABIOVELAR ", " k͡p ", 0)
     
     ###ENGLISH_MFA
     phonefield$ = replace$(phonefield$, " ENGLISH_MFA_VOWEL ", " a aj aw aː e ej i iː o ow u uː æ ɐ ɑ ɑː ɒ ɒː ɔ ɔj ə əw ɚ ɛ ɛː ɜ ɜː ɝ ɪ ʉ ʉː ʊ ", 0)
@@ -1997,5 +1999,69 @@ endproc
 
 
 
+<<<<<<< HEAD
+=======
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>>>>>> 2f65283dc18afc74c5d4f4fa6097dffd9e6abb93
 #including procedures on line 2001 so that error messages will be more informative (subtract 2000 from the line number to find the line in the procedures file)
 include one_script_procedures_dev.praat

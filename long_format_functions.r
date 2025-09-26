@@ -13,7 +13,7 @@ find_datacolumns <- function(data, labels){
 	datacolumns <- list()
 	for (label in labels){
 		#datacolumns[[label]] <- names(data)[grepl(label, names(data))]
-		datacolumns[[label]] <- setdiff(names(data)[grepl(paste0(label,'_'), names(data))], 
+		datacolumns[[label]] <- setdiff(names(data)[grepl(paste0(label,'_','[0-9]'), names(data))], 
 			c(names(data)[grepl('step', names(data))], names(data)[grepl('measure', names(data))], names(data)[grepl('r2', names(data))]))
 	}
 	datacolumns
@@ -53,6 +53,7 @@ long_format_formants <- function(token_row, parameters=c('F'), formants=1:3, dat
 	if (is.null(datacolumns)){
 		pf <- expand.grid(formants=formants, parameters=parameters)
 		datacolumns <- find_datacolumns(token_row, paste0(pf[,2],pf[,1]))
+		# print(datacolumns)
 	}
 	
 	basic_fp <- paste0(parameters[1],formants[1])

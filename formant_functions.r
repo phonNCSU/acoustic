@@ -2660,7 +2660,7 @@ schwartz_F2_prime <- function(F2,F3,F4,units='bark'){
 # }
 
 
-choose_bandwidths = function(data_summary, formant_candidates, what_col='phone'){
+choose_bandwidths = function(data_summary, formant_candidates, what_col='phone', fixed='max_formant'){
 
     require(zoo)
 
@@ -2668,22 +2668,46 @@ choose_bandwidths = function(data_summary, formant_candidates, what_col='phone')
     for (x in unique(data_summary[,what_col])){
         print(x)
         xdata= data_summary[data_summary[,what_col]==x,]
-        windowed = rollapply(xdata$log_B2_50, width=3, FUN=mean, na.rm=TRUE, fill=NA)[xdata$total_formants%in%formant_candidates]
-        best = formant_candidates[which(windowed==min(windowed,na.rm=TRUE))[1]]
+
+        # if (fixed=='max_formant'){
+        #     windowed = rollapply(xdata$log_B2_50, width=3, FUN=mean, na.rm=TRUE, fill=NA)[xdata$total_formants%in%formant_candidates]
+        # }else{
+        #     windowed = rollapply(xdata$log_B2_50, width=3, FUN=mean, na.rm=TRUE, fill=NA)[xdata$max_formant%in%formant_candidates]
+        # }
+        # print('xdata')
+        # print(xdata$log_B2_50)
+        # print('windowed')
+        # print(windowed)
+        # best = formant_candidates[which(windowed==min(windowed,na.rm=TRUE))[1]]
+        best = formant_candidates[which(xdata$log_B2_50==min(xdata$log_B2_50,na.rm=TRUE))[1]]
         if (nrow(xdata)){
             best_bw = rbind(best_bw, data.frame(what_col=x,best=best))
         }
     }
     names(best_bw)[1] = what_col
-    best_bw$best_centered = round(2*(best_bw$best - mean(best_bw$best)))/2
+    if (fixed=='max_formant'){
+        best_bw$best_centered = round(2*(best_bw$best - mean(best_bw$best)))/2
+    }else{
+        best_bw$best_centered = best_bw$best - round(mean(best_bw$best), -2)
+    }
     best_bw
 }
 
-optimize_within_speaker = function(my_data, phone_col='phone', best_bw, best_by_ph, mcols = c('F1_50','F2_50','log_B1_50','log_B2_50')){
+optimize_within_speaker = function(my_data, phone_col='phone', best_bw, best_by_ph, start='mdist', mcols = c('F1_50','F2_50','log_B1_50','log_B2_50'), fixed='max_formant'){
 
+    start_time = Sys.time()
+    if (fixed=='total_formants'){
+        unfixed='max_formant'
+    }else{
+        unfixed='total_formants'
+    }
     require(plyr)
     
+    mf_range = range(my_data[,unfixed])
+
     my_data$new_best_mdist = my_data$best_mdist
+
+
     for (i in 1:length(unique(my_data$speaker))){
         sp = unique(my_data$speaker)[i]
         print ('##################################################################')
@@ -2692,84 +2716,201 @@ optimize_within_speaker = function(my_data, phone_col='phone', best_bw, best_by_
         sp_data = subset(my_data, speaker==sp)
 
         for (ph in unique(sp_data[,phone_col])){
-            candidates = min(best_by_ph[best_by_ph[,phone_col]==ph,'best'] + best_bw[best_bw$speaker==sp,'best_centered'],6.5) + c(-1, -0.5, 0, 0.5, 1)
+            # candidates = min(best_by_ph[best_by_ph[,phone_col]==ph,'best'] + best_bw[best_bw$speaker==sp,'best_centered'],6.5) + c(-1, -0.5, 0, 0.5, 1)
+            initial_candidate = best_by_ph[best_by_ph[,phone_col]==ph,'best'] + best_bw[best_bw$speaker==sp,'best_centered']
+            # print(initial_candidate)
+            initial_candidate = max(initial_candidate,min(initial_candidate,mf_range[2]),mf_range[1])
+            # print(initial_candidate)
+            # print(mf_range)
+            # candidates = min(initial_candidate,min(my_data[,unfixed])+1) + c(-1, -0.5, 0, 0.5, 1)
+
+            if (fixed=='total_formants'){
+
+                if (initial_candidate < mf_range[1]+200){
+                    candidates = mf_range[1]+200 + c(-200, -100, 0, 100, 200)
+                }else if(initial_candidate > max(my_data[,unfixed])-1){
+                    candidates = mf_range[2]-200 + c(-200, -100, 0, 100, 200)
+                }else{
+                    candidates = initial_candidate + c(-200, -100, 0, 100, 200)
+                }
+
+            }else{
+
+                if (initial_candidate < mf_range[1]+1){
+                    candidates = mf_range[1]+1 + c(-1, -0.5, 0, 0.5, 1)
+                }else if(initial_candidate > max(my_data[,unfixed])-1){
+                    candidates = mf_range[2]-1 + c(-1, -0.5, 0, 0.5, 1)
+                }else{
+                    candidates = initial_candidate + c(-1, -0.5, 0, 0.5, 1)
+                }
+            }
             # print(ph)
             # print(candidates)
-            testdata = sp_data[sp_data[,phone_col]==ph & sp_data$total_formants %in% candidates,]
+            # print(initial_candidate)
+            testdata = sp_data[sp_data[,phone_col]==ph & sp_data[,unfixed] %in% candidates,]
+            testdata$initial_candidate=initial_candidate
+            
+            # print(testdata)
 
             # print(unique(testdata$token_id))
-            if (length(unique(testdata$token_id))>2){
+            # if (length(unique(testdata$token_id))>2){
 
-                testdata = ddply(testdata, .(token_id), mutate, best_mdist = as.numeric(mdist==min(mdist)[1]))
-                testdata = testdata[,c('token_id',mcols,'best_mdist')]
+                if (start=='mdist'){
+                    testdata = ddply(testdata, .(token_id), mutate, current_best_mdist = as.numeric(mdist==min(mdist)[1]))
+                    testdata = testdata[,c('token_id',mcols,'max_formant','current_best_mdist')]
+                }else if (start=='group'){
+                    # group_data = my_data[my_data[,phone_col]==ph & my_data$max_formant==my_data$starting_max_formant,mcols]
+                    # test_cov = cov(na.omit(group_data))
+                    # test_means = colMeans(group_data, na.rm=TRUE)
+                    # print(nrow(group_data))
+                    # testdata$new_mdist = as.numeric(mahalanobis(testdata[,mcols], test_means, test_cov))
+                    # testdata = ddply(testdata, .(token_id), mutate, current_best_mdist = as.numeric(new_mdist==min(new_mdist)[1]))
+                    # testdata$new_best_mdist=testdata$current_best_mdist
+                    testdata$current_best_mdist=testdata$group_best_mdist
+                    testdata$new_best_mdist=testdata$group_best_mdist
+                    testdata$new_mdist=testdata$group_mdist
+                    # print(names(testdata))
+                    # print('xxx')
+                }else{
+                    # print(names(testdata))
+                    names(testdata)[names(testdata)==unfixed] = 'unfixed'
+                    testdata = ddply(testdata, .(token_id), mutate, current_best_mdist = as.numeric(unfixed==initial_candidate))
+                    names(testdata)[names(testdata)=='unfixed'] = unfixed
+                    testdata = testdata[,c('token_id',mcols,'max_formant','current_best_mdist')]
+                }
+                # print(setdiff(c('token_id',mcols,'current_best_mdist'),names(testdata)))
                 
-                best_testdata = subset(testdata, best_mdist==1)
+                # print('x')
+
+                
+                best_testdata = subset(testdata, current_best_mdist==1)
                 print(paste0(ph,': n=',nrow(best_testdata),'; candidates: ',paste(candidates, collapse=' ')))
                 iterations = 1
                 # if (nrow(best_testdata)>2){
                 change_rate = 1
+
+                # print('y')
                 while (change_rate>0 & iterations < 21){
-                    test_cov = cov(best_testdata[,mcols])
-                    test_means = colMeans(best_testdata[,mcols])
+                    # print(nrow(best_testdata[,mcols]))
+                    # print(nrow(na.omit(best_testdata[,mcols])))
+                    test_cov = cov(na.omit(best_testdata[,mcols]))
+                    test_means = colMeans(best_testdata[,mcols], na.rm=TRUE)
                     
-                    testdata$new_best_mdist = testdata$best_mdist
+                # print(test_means)
+                    # testdata$new_best_mdist = testdata$current_best_mdist
+                    # testdata$new_best_mdist = NA
+                    # testdata$new_mdist = NA
+
+                    # print(names(testdata))
                     tryCatch(
                         {
-                            testdata$new_mdists = as.numeric(mahalanobis(testdata[,mcols], test_means, test_cov))
-                            testdata = ddply(testdata, .(token_id), mutate, new_best_mdist = as.numeric(new_mdists==min(new_mdists)[1]))
+                            testdata$new_mdist = as.numeric(mahalanobis(testdata[,mcols], test_means, test_cov))# ,tol=1e-20))
+                                # default tol: .Machine$double.eps = 2.220446e-16
+                            testdata = ddply(testdata, .(token_id), mutate, new_best_mdist = as.numeric(new_mdist==min(new_mdist)[1]))
                         },
                         error = function(cond) {
-                            message(paste("exiting Mahalanobis procedure"))
+                            message(paste("EXITING MAHALANOBIS PROCEDURE"))
                         }
                     )
-                    changes_and_nas = testdata$new_best_mdist!=testdata$best_mdist
+                    # if (!'new_best_mdist' %in% names(testdata)){
+                    # if (!sum(!is.na(testdata$new_best_mdist))){
+                    #     testdata$new_mdist = NA
+                    #     testdata$new_best_mdist = testdata$current_best_mdist
+                    #     print('xxxx')
+                    # }
+                    # print(testdata$new_mdist)
+                    changes_and_nas = testdata$new_best_mdist!=testdata$current_best_mdist
                     just_changes = changes_and_nas
                     just_changes[is.na(just_changes)] = FALSE
-                    # print(just_changes)
-                    # change_rate = sum(testdata$new_best_mdist!=testdata$best_mdist)/length(testdata$best_mdist)
-                    change_rate = sum(just_changes)/length(testdata$best_mdist)
-                    print(paste('    iteration',iterations,'changed',round(change_rate,3),'of tokens'))
-                    testdata$best_mdist = testdata$new_best_mdist
-                    testdata = testdata[,c('token_id',mcols,'best_mdist')]
-                    best_testdata = subset(testdata, best_mdist==1)
-                    iterations = iterations + 1
-                }
 
-                my_data[my_data$speaker==sp & my_data[,phone_col]==ph & my_data$total_formants%in%candidates,'new_best_mdist'] = testdata$best_mdist
-                my_data[my_data$speaker==sp & my_data[,phone_col]==ph & !my_data$total_formants%in%candidates,'new_best_mdist'] = 0
-            }else{
-                print (paste('fewer than 3 tokens of',ph,'for',sp))
-                my_data[my_data$speaker==sp & my_data[,phone_col]==ph & my_data$total_formants==candidates[ceiling(length(candidates)/2)],'new_best_mdist'] = 1
-                my_data[my_data$speaker==sp & my_data[,phone_col]==ph & !my_data$total_formants==candidates[ceiling(length(candidates)/2)],'new_best_mdist'] = 0
+                    print(paste0('    iteration ',iterations,' changed ',round(change_rate*100),'% of tokens'))
+                    testdata$current_best_mdist = testdata$new_best_mdist
+                    # print('x')
+                    # print(setdiff(c('token_id',mcols,'best_mdist','new_mdist'),names(testdata)))
+                    # print(setdiff(c('token_id',mcols,'max_formant','current_best_mdist','new_mdist'),names(testdata)))
+                    testdata = testdata[,c('token_id',mcols,'max_formant','current_best_mdist','new_mdist')]
+                    # print('y')
+                    best_testdata = subset(testdata, current_best_mdist==1)
+
+                    iterations = iterations + 1
+                    change_rate = sum(just_changes)/length(testdata$current_best_mdist)
+                }
+            # print(testdata$new_mdist)
+            # print('XXX')
+            # print(my_data[my_data$speaker==sp & my_data[,phone_col]==ph &  my_data[,unfixed]%in%candidates,][,'max_formant'])
+            # print('YYY')
+            # print(names(testdata))
+            # print(testdata[,'max_formant'])
+            my_data[my_data$speaker==sp & my_data[,phone_col]==ph & !my_data[,unfixed]%in%candidates,'new_best_mdist'] = 0
+
+            for (r in 1:nrow(testdata)){
+                # print(testdata[r,c('token_id','max_formant')])
+                my_data[my_data$token_id==testdata[r,'token_id'] & my_data[,unfixed]==testdata[r,unfixed],'new_mdist'] = testdata[r,'new_mdist']
+                my_data[my_data$token_id==testdata[r,'token_id'] & my_data[,unfixed]==testdata[r,unfixed],'new_best_mdist'] = testdata[r,'current_best_mdist']
             }
+
+            # print(my_data[my_data$token_id==testdata$token_id,c('token_id',unfixed,'new_mdist','new_best_mdist')])
+            # my_data[my_data$speaker==sp & my_data[,phone_col]==ph &  my_data[,unfixed]%in%candidates,'new_mdist'] = testdata$new_mdist
+            # my_data[my_data$speaker==sp & my_data[,phone_col]==ph &  my_data[,unfixed]%in%candidates,'new_best_mdist'] = testdata$current_best_mdist
+            # my_data[my_data$speaker==sp & my_data[,phone_col]==ph & !my_data[,unfixed]%in%candidates,'new_best_mdist'] = 0
+
+
+
+            # }else{
+            #     print (paste('fewer than 3 tokens of',ph,'for',sp))
+                # print(testdata$new_mdist)
+                # print(my_data[my_data$speaker==sp & my_data[,phone_col]==ph,])
+                # my_data[my_data$speaker==sp & my_data[,phone_col]==ph & my_data[,unfixed]%in%candidates,'new_mdist'] = testdata$new_mdist
+                # my_data[my_data$speaker==sp & my_data[,phone_col]==ph & my_data[,unfixed]==candidates[ceiling(length(candidates)/2)],'new_best_mdist'] = 1
+                # my_data[my_data$speaker==sp & my_data[,phone_col]==ph & !my_data[,unfixed]==candidates[ceiling(length(candidates)/2)],'new_best_mdist'] = 0
+            # }
+            # print(summary(testdata$new_mdist))
+            # print(head(testdata))
+            # print(aggregate(new_best_mdist==1 ~ token_id, FUN=sum, testdata))
         }
     }
+    print(as.POSIXct(Sys.time()) - as.POSIXct(start_time))
     my_data
 }
 
 
-choose_candidates_with_B2_50 <- function(data, phone_candidates=NULL, speaker_candidates=NULL, 
+choose_candidates_with_B2_50 <- function(data, phone_candidates=NULL, speaker_candidates=NULL, fixed='max_formant',
     phone_col='allophone0', speaker_col='speaker'){
 
-    if (is.null(phone_candidates)) phone_candidates = sort(unique(data$total_formants))
-    if (is.null(speaker_candidates)) speaker_candidates = sort(unique(data$total_formants))
-
+    if (fixed=='max_formant'){
+        if (is.null(phone_candidates)) phone_candidates = sort(unique(data$total_formants))
+        if (is.null(speaker_candidates)) speaker_candidates = sort(unique(data$total_formants))
+    }else{
+        if (is.null(phone_candidates)) phone_candidates = sort(unique(data$max_formant))
+        if (is.null(speaker_candidates)) speaker_candidates = sort(unique(data$max_formant))
+    }
     data$phone_col = data[,phone_col]
     data$speaker_col = data[,speaker_col]
 
-    print('summarizing phones...')
-    data_summary_by_phone = ddply(data, .(phone_col, total_formants), summarize, 
-        log_mdist=mean(log(mdist)), log_B2_50=mean(log(B2_50)))
 
-    print('summarizing speakers...')
-    data_summary_by_speaker = ddply(data, .(speaker_col, total_formants), summarize, 
-        log_mdist=mean(log(mdist)), log_B2_50=mean(log(B2_50)))
+    if (fixed=='max_formant'){
+        print('summarizing phones...')
+        data_summary_by_phone = ddply(data, .(phone_col, total_formants), summarize, 
+            log_mdist=mean(log(mdist)), log_B2_50=mean(log(B2_50)))
+
+        print('summarizing speakers...')
+        data_summary_by_speaker = ddply(data, .(speaker_col, total_formants), summarize, 
+            log_mdist=mean(log(mdist)), log_B2_50=mean(log(B2_50)))
+    }else{
+        print('summarizing phones...')
+        data_summary_by_phone = ddply(data, .(phone_col, max_formant), summarize, 
+            log_mdist=mean(log(mdist)), log_B2_50=mean(log(B2_50)))
+
+        print('summarizing speakers...')
+        data_summary_by_speaker = ddply(data, .(speaker_col, max_formant), summarize, 
+            log_mdist=mean(log(mdist)), log_B2_50=mean(log(B2_50)))
+    }
 
     print('choosing candidates for phones...')
-    best_by_ph = choose_bandwidths(data_summary_by_phone, phone_candidates, what_col='phone_col')
+    best_by_ph = choose_bandwidths(data_summary_by_phone, phone_candidates, what_col='phone_col', fixed=fixed)
     names(best_by_ph) = gsub('phone_col', phone_col, names(best_by_ph))
     print('choosing candidates for speakers...')
-    best_bw = choose_bandwidths(data_summary_by_speaker, speaker_candidates, what_col='speaker_col')
+    best_bw = choose_bandwidths(data_summary_by_speaker, speaker_candidates, what_col='speaker_col', fixed=fixed)
     names(best_bw) = gsub('speaker_col', speaker_col, names(best_bw))
 
     list(data_summary_by_phone=data_summary_by_phone, data_summary_by_speaker=data_summary_by_speaker, best_by_ph=best_by_ph, best_bw=best_bw)
@@ -2780,7 +2921,8 @@ bark_all_formants <- function(data, formants=1:3){
     for (f in formants){
         for (colname in names(data)[grepl(paste0('F',f,'_[0-9]'), names(data))]){
             print(colname)
-            bark_colname = gsub('_','b_',colname)
+            # bark_colname = gsub('_','b_',colname)
+            bark_colname = gsub('F','Fb',colname)
             data[,bark_colname] = bark(data[,colname])
         }
     }
@@ -2788,17 +2930,256 @@ bark_all_formants <- function(data, formants=1:3){
 }
 
 
-dct_all_formants <- function(data, formants=1:3, subtype='', coefficients=4, bark=FALSE, measurement_points=seq(20,80,5)){
+dct_all_formants <- function(data, formants=1:3, subtype='', coefficients=4, bark=FALSE, measurement_points=seq(20,80,5), interpolate_nas=TRUE){
 
     Fdata = list()
     Fdct = list()
 
+    if (bark){
+        # subtype=paste0(subtype,'b')
+        fname = 'Fb'
+    }else{
+        fname = 'F'
+    }
+
     for (f in formants){
-        print(paste0('calculating DCTs for F',f,'...'))
-        Fdata[[f]] = as.matrix(data[,paste0('F',f,subtype,'_',seq(20,80,5))])
+        Fdata[[f]] = as.matrix(data[,paste0(fname,f,subtype,'_',seq(20,80,5))])        
+        if(interpolate_nas){
+            Fdata[[f]] = na.approx(Fdata[[f]],na.rm=FALSE)
+        }
         Fdct[[f]] = dct(Fdata[[f]])/ncol(Fdata[[f]])
-        data[,paste0('F',f,'DCT',subtype,c(1:coefficients)-1)] = Fdct[[f]][,1:coefficients]
+        data[,paste0(fname,f,'DCT',subtype,c(1:coefficients)-1)] = Fdct[[f]][,1:coefficients]
     }
 
     data
+}
+
+
+rate_track_smoothness <- function(data, parameters='Fb', formants=1:5, included_measures=5:17, dcts_to_retain=4, label=''){
+    start_time = Sys.time()
+    data$sos_error = NA
+    data$na_total = NA
+    for (r in 1:nrow(data)){
+        if (!r %% 1000){
+            print(paste(r,"/",nrow(data)))
+        }
+        token_long = long_format_formants(data[r,], parameters=parameters, formants=formants)
+        all_error = c()
+        all_na = 0
+        for (i in formants){
+            fname = paste0('Fb',i)
+            one_dct = dct(token_long[included_measures,fname]/length(included_measures)) 
+            one_dct[(dcts_to_retain+1):length(included_measures)] = 0
+            token_predicted_F = dct(length(included_measures)*one_dct,invert=TRUE)
+
+            all_error = c(all_error, token_predicted_F-token_long[included_measures,fname])
+            all_na = all_na + sum(is.na(token_long[included_measures,fname]))
+        }
+        
+        data[r,'sos_error'] = sqrt(sum(all_error^2,na.rm=TRUE))
+        data[r,'all_na'] = all_na/(length(formants)*length(included_measures))
+    }
+    data = ddply(data, .(token_id), mutate, smoothest_track=as.numeric(sos_error==min(sos_error,na.rm=TRUE)))
+
+    if (label!=''){
+        for (colname in c("sos_error", "na_total", "all_na", "smoothest_track")){
+            names(data)[names(data)==colname] = paste(colname,label,sep='_')
+        }
+    }
+    print(as.POSIXct(Sys.time()) - as.POSIXct(start_time))
+    data
+}
+
+
+rate_track_separation <- function(data, parameters='Fb', formants=1:5, included_measures=5:17,label=''){
+    start_time = Sys.time()
+
+    require(lme4)
+    require(multcomp)
+
+    all_tstats = c()
+
+    for (sp in unique(data$speaker)){
+        for (ph in unique(data$allophone0)){
+            print(paste(sp,ph))
+            subdata = subset(data, speaker==sp & allophone0==ph)
+
+            all_formants_long = c()
+            all_formants_for_comparison = c()
+
+            for (r in 1:nrow(subdata)){
+
+                token_long = long_format_formants(data[r,], parameters=parameters, formants=formants)
+                token_long = token_long[included_measures,]
+
+                all_formants_long = rbind(all_formants_long, 
+                    data.frame(token_long, max_formant=subdata[r,'max_formant']))
+            }
+
+
+            for (f in formants){
+                all_formants_for_comparison = rbind(all_formants_for_comparison, 
+                    data.frame(x=all_formants_long$x, max_formant=all_formants_long$max_formant, formant=paste0(parameters,f), frequency=all_formants_long[,paste0(parameters,f)]))
+            }
+
+            compare_versions = list()
+            compare_versions_tstat = c()
+            for (mf in unique(subdata$max_formant)){
+                compare_versions[[paste(mf)]] = lmer(frequency ~ formant + (1|x), data=subset(all_formants_for_comparison, max_formant==mf))
+                posthoc = summary(glht(compare_versions[[paste(mf)]], linfct = mcp(formant = "Tukey")), test = adjusted("holm"))
+
+                results_df = data.frame(max_formant=mf)
+                for (f in 1:(max(formants)-1)){
+                    if (label!=''){
+                        colname = paste0('F',f,'F',f+1,'_',label)
+                    }else{
+                        colname = paste0('F',f,'F',f+1)
+                    }
+                    results_df[,colname] = posthoc$test$tstat[paste0(parameters,f+1,' - ',parameters,f)]
+                }
+                compare_versions_tstat = rbind(compare_versions_tstat, results_df)
+            }
+
+            compare_versions_tstat$z_geom_mean = sqrt(compare_versions_tstat[,2]^2+compare_versions_tstat[,3]^2+compare_versions_tstat[,4]^2+compare_versions_tstat[,5]^2)
+            compare_versions_tstat$z_mean = (compare_versions_tstat[,2]+compare_versions_tstat[,3]+compare_versions_tstat[,4]+compare_versions_tstat[,5])/4
+
+            all_tstats = rbind(all_tstats, merge(subdata[,c('token_id','max_formant')], compare_versions_tstat))
+        }
+    }
+    
+    if (label!=''){
+        for (colname in c("z_geom_mean", "z_mean")){
+            names(all_tstats)[names(all_tstats)==colname] = paste(colname,label,sep='_')
+        }
+    }
+
+    print(as.POSIXct(Sys.time()) - as.POSIXct(start_time))
+    data = merge(data, all_tstats)
+}
+
+
+
+smooth_smoothness_and_separation <- function(data){
+    start_time = Sys.time()
+    require(zoo)
+    # this is only used internally
+    print('0/13')
+    data_averaged_by_phone = ddply(data, .(allophone0, max_formant), summarize, 
+        n=length(unique(token_id)), sos_error=mean(sos_error, na.rm=TRUE), z_geom_mean=mean(z_geom_mean, na.rm=TRUE))
+
+    print('1/13')
+    data_smoothed_by_phone = ddply(data_averaged_by_phone, .(allophone0), mutate, 
+        smooth_sos_error=rollapply(sos_error, width=5, FUN=mean, na.rm=TRUE, fill='extend'), 
+        smooth_z_geom_mean=rollapply(z_geom_mean, width=5, FUN=mean, na.rm=TRUE, fill='extend'))
+
+    print('2/13')
+    data_best_by_phone = ddply(data_smoothed_by_phone, .(allophone0), summarize, 
+        n=n[1],
+        best_sos_error = max_formant[which(smooth_sos_error==min(smooth_sos_error))[1]], 
+        best_z_geom_mean = max_formant[which(smooth_z_geom_mean==max(smooth_z_geom_mean))[1]])
+
+    print('3/13')
+    # this is only used internally
+    data_averaged_by_speaker = ddply(data, .(speaker, max_formant), summarize, 
+        n=length(unique(token_id)), sos_error=mean(sos_error, na.rm=TRUE), z_geom_mean=mean(z_geom_mean, na.rm=TRUE))
+
+    print('4/13')
+    data_smoothed_by_speaker = ddply(data_averaged_by_speaker, .(speaker), mutate, 
+        smooth_sos_error=rollapply(sos_error, width=5, FUN=mean, na.rm=TRUE, fill='extend'), 
+        smooth_z_geom_mean=rollapply(z_geom_mean, width=5, FUN=mean, na.rm=TRUE, fill='extend'))
+
+    print('5/13')
+    data_best_by_speaker = ddply(data_smoothed_by_speaker, .(speaker), summarize, 
+        n=n[1],
+        best_sos_error = max_formant[which(smooth_sos_error==min(smooth_sos_error))[1]], 
+        best_z_geom_mean = max_formant[which(smooth_z_geom_mean==max(smooth_z_geom_mean))[1]])
+
+    print('6/13')
+    # this is only used internally
+    data_averaged_by_both = ddply(data, .(speaker, allophone0, max_formant), summarize, 
+        n=length(unique(token_id)), sos_error=mean(sos_error, na.rm=TRUE), z_geom_mean=mean(z_geom_mean, na.rm=TRUE))
+
+    print('7/13')
+    data_smoothed_by_both = ddply(data_averaged_by_both, .(speaker, allophone0), mutate, 
+        smooth_sos_error=rollapply(sos_error, width=5, FUN=mean, na.rm=TRUE, fill='extend'), 
+        smooth_z_geom_mean=rollapply(z_geom_mean, width=5, FUN=mean, na.rm=TRUE, fill='extend'))
+
+    print('8/13')
+    data_best_by_both = ddply(data_smoothed_by_both, .(speaker, allophone0), summarize,  
+        both_n=n[1],
+        best_sos_error = max_formant[which(smooth_sos_error==min(smooth_sos_error))[1]], 
+        best_z_geom_mean = max_formant[which(smooth_z_geom_mean==max(smooth_z_geom_mean))[1]])
+
+    print('9/13')
+    data_best_by_both = merge(data_best_by_both, data.frame(allophone0=data_best_by_phone$allophone0, 
+                                                            allophone0_n=data_best_by_phone$n, 
+                                                            allophone0_best_sos_error=data_best_by_phone$best_sos_error, 
+                                                            allophone0_best_z_geom_mean=data_best_by_phone$best_z_geom_mean))
+    print('10/13')
+    data_best_by_both = merge(data_best_by_both, data.frame(speaker=data_best_by_speaker$speaker, 
+                                                            speaker_n=data_best_by_speaker$n, 
+                                                            speaker_best_sos_error=data_best_by_speaker$best_sos_error, 
+                                                            speaker_best_z_geom_mean=data_best_by_speaker$best_z_geom_mean))
+
+
+    print(as.POSIXct(Sys.time()) - as.POSIXct(start_time))
+
+    list(data_smoothed_by_phone=data_smoothed_by_phone, 
+         data_best_by_phone=data_best_by_phone,
+         data_smoothed_by_speaker=data_smoothed_by_speaker,
+         data_best_by_speaker=data_best_by_speaker,
+         data_smoothed_by_both=data_smoothed_by_both,
+         data_best_by_both=data_best_by_both#,
+         # best_bw_new=best_bw_new,
+         # best_bw_by_ph_new=best_bw_by_ph_new,
+         # best_bw_to_merge=best_bw_to_merge
+         )
+}
+
+all_vowel_measure_plots <- function(){
+    # hist(subset(subdata, best==1)$max_formant, breaks=7, xlim=range(data$max_formant), 
+    #   main=paste(main, 'best candidates:\none_script'), xlab='max_formant', col=colsub1)
+    hist(subset(subdata, new_best_mdist==1)$max_formant, breaks=20, #xlim=range(data$max_formant), 
+        main=paste(main, 'best candidates:\noptimize_within_speaker'), xlab='max_formant', col=colsub2)
+    # boxplot(log(mdist) ~ max_formant, subdata, main=paste(main, 'log(old mahalanobis distance)'), col=col)
+    # print(summary(subdata$new_mdist))
+    if (sum(!is.na(subdata$new_mdist))){
+        # print('ok')
+        # print(subdata[!is.na(subdata$new_mdist),'new_mdist'])
+        boxplot(log(new_mdist) ~ max_formant, subdata, main=paste(main, 'log(new mahalanobis distance)'), col=col)
+    }else{
+        # print('not ok')
+        plot(0,0,type='n',axes=FALSE,xlab='',ylab='')
+    }
+    boxplot(sos_error ~ max_formant, subdata, main=paste(main, 'SOS error'), col=col)
+    boxplot(log(1-all_na) ~ max_formant, subdata, main=paste(main, 'non-NA rate'), col=col)
+    plot(0,0,type='n',axes=FALSE,xlab='',ylab='')
+
+    subdata_for_tstat = ddply(subdata, .(max_formant,allophone,speaker), summarize, 
+        F1F2=F1F2[1], F2F3=F2F3[1], F3F4=F3F4[1], F4F5=F4F5[1], z_mean=z_mean[1], z_geom_mean=z_geom_mean[1])
+
+    boxplot(F1F2 ~ max_formant, subdata_for_tstat, xlab='max formant', ylab='z value', main='F1 vs. F2')
+    boxplot(F2F3 ~ max_formant, subdata_for_tstat, xlab='max formant', ylab='z value', main='F2 vs. F3')
+    boxplot(F3F4 ~ max_formant, subdata_for_tstat, xlab='max formant', ylab='z value', main='F3 vs. F4')
+    boxplot(F4F5 ~ max_formant, subdata_for_tstat, xlab='max formant', ylab='z value', main='F4 vs. F5')
+    boxplot(z_geom_mean ~ max_formant, subdata_for_tstat, xlab='max formant', ylab='mean z value', main='Fn vs. Fn+1 geom mean')
+
+    Bsummary = ddply(subdata, .(max_formant), summarize, log_B1_50=mean(log(B1_50), na.rm=TRUE), log_B2_50=mean(log(B2_50), na.rm=TRUE), 
+        log_B3_50=mean(log(B3_50), na.rm=TRUE), log_B4_50=mean(log(B4_50), na.rm=TRUE), log_B5_50=mean(log(B5_50), na.rm=TRUE))
+    # print(Bsummary)
+    boxplot(log(B1_50) ~ max_formant, subdata, main=paste(main, 'log(B1_50)'), col=col)
+    points(factor(Bsummary$max_formant), Bsummary$log_B1_50, type='l', col='red')
+    boxplot(log(B2_50) ~ max_formant, subdata, main=paste(main, 'log(B2_50)'), col=col)
+    points(factor(Bsummary$max_formant), Bsummary$log_B2_50, type='l', col='red')
+    boxplot(log(B3_50) ~ max_formant, subdata, main=paste(main, 'log(B3_50)'), col=col)
+    points(factor(Bsummary$max_formant), Bsummary$log_B3_50, type='l', col='red')
+    boxplot(log(B4_50) ~ max_formant, subdata, main=paste(main, 'log(B4_50)'), col=col)
+    points(factor(Bsummary$max_formant), Bsummary$log_B4_50, type='l', col='red')
+    boxplot(log(B5_50) ~ max_formant, subdata, main=paste(main, 'log(B5_50)'), col=col)
+    points(factor(Bsummary$max_formant), Bsummary$log_B5_50, type='l', col='red')
+    boxplot(F1_50 ~ max_formant, subdata, main=paste(main, 'F1_50'), col=col)
+    boxplot(F2_50 ~ max_formant, subdata, main=paste(main, 'F2_50'), col=col)
+    boxplot(F3_50 ~ max_formant, subdata, main=paste(main, 'F3_50'), col=col)
+    boxplot(F4_50 ~ max_formant, subdata, main=paste(main, 'F4_50'), col=col)
+    boxplot(F5_50 ~ max_formant, subdata, main=paste(main, 'F5_50'), col=col)
 }
