@@ -401,6 +401,7 @@ procedure clips (.argString$)
     .filtering = 0
     .sanitize = 1
     .scale_peak = 0
+    .spectrograms = 0
 
     for i to parseArgs.n_args
         x$ = parseArgs.var$[i]
@@ -418,6 +419,8 @@ procedure clips (.argString$)
             .sanitize = number(parseArgs.val$[i])
         elif parseArgs.var$[i] == "scale"
             .scale_peak = number(parseArgs.val$[i])
+        elif parseArgs.var$[i] == "spectrograms"
+            .spectrograms = number(parseArgs.val$[i])
         elif parseArgs.var$[i] == "categories"
             # pass
         elif parseArgs.var$[i] == "trigrams"
@@ -438,6 +441,16 @@ procedure clips (.argString$)
         fileappend 'outfile$' ,clip_start,clip_end,stimulus
     elif isComplete == 1
         printline FINISHED  
+
+        if .spectrograms == 1
+            .pdfunite_command$ = "pdfunite "+clipPath$+"/*.pdf clips_"+datestamp$+".pdf"
+            printline #####################################
+            printline Created individual spectrogram pdfs. Combine to one pdf with this command:
+            printline '.pdfunite_command$'             
+            printline #####################################
+        endif
+
+
     else
         select Sound 'sound_name$'
         .clip_start = round(1000*(transport.word_start - .pad))/1000
@@ -446,7 +459,7 @@ procedure clips (.argString$)
         .original_rate = Get sampling frequency
         #printline '.original_rate' '.rate'
         if .original_rate != .rate
-            printline resampling 'sound_name$' to '.rate' Hz
+            # printline resampling 'sound_name$' to '.rate' Hz
             Resample: .rate, 50
             selectObject: "Sound 'sound_name$'_part"
             Remove
@@ -484,6 +497,37 @@ procedure clips (.argString$)
         selectObject: "TextGrid 'textgrid_name$'"
         Extract part: .clip_start, .clip_end, "no"
         Save as text file: "'clipPath$'/'.sound_filename$'.TextGrid"
+        ###################################################
+
+        # THIS IS TO SAVE SPECTROGRAMS TOO ################
+        if .spectrograms == 1
+            Erase all
+
+            .token_label_no_underscores$ = replace$(token_id$, "_", " ", 0)
+            #printline '.token_label_no_underscores$'
+
+            selectObject: "Sound "+sound_name$+"_part"
+            To Spectrogram: 0.005, 5000, 0.002, 20, "Gaussian"
+
+            Select outer viewport: 0, 6, 0.5, 3.5
+            Paint: 0, 0, 0, 0, 100, "yes", 50, 6, 0, "yes"
+            Text: .clip_start, "left", 5300, "half", .token_label_no_underscores$
+
+            selectObject: "TextGrid "+textgrid_name$
+            plusObject: "Sound "+sound_name$
+            Select outer viewport: 0, 6, 3.5, 5.5
+            Draw: .clip_start, .clip_end, "yes", "yes", "yes"
+
+            Select outer viewport: 0, 6, 0, 6
+            Save as PDF file: clipPath$+"/"+.sound_filename$+".pdf"
+
+            selectObject: "Spectrogram "+sound_name$+"_part"
+            Remove
+        endif
+        ###################################################
+
+        ###################################################
+        selectObject: "TextGrid 'textgrid_name$'_part"
         Remove
         ###################################################
 
