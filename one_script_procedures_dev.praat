@@ -1263,6 +1263,58 @@ procedure tier3 (.argString$)
 
 endproc
 
+#######################################################################################
+# PROCEDURE: annotation_tier()
+# include an annotation from a tier specified by name
+#
+# EXAMPLE: 'annotation_tier(tier_name=phrase)' [record the label of an interval in a phrase tier]
+#######################################################################################
+
+procedure annotation_tier (.argString$)
+
+    @parseArgs (.argString$)
+    
+    for .i to parseArgs.n_args
+        if parseArgs.var$[.i] == "tier_name"
+            .tier_name$ = parseArgs.val$[.i]
+        elif parseArgs.var$[.i] != ""
+            if isHeader == 1
+                .unknown_var$ = parseArgs.var$[.i]
+                printline skipped unknown argument '.unknown_var$'
+            endif
+        endif
+    endfor
+
+    if isHeader = 1 
+        printline annotation_tier('.argString$')
+        fileappend 'outfile$' ,'.tier_name$'
+    elif isComplete == 1
+        printline FINISHED  
+    else
+        select TextGrid 'textgrid_name$'
+        .phone_mid = transport.phone_start + (transport.duration / 2)
+        .tier_number = -1
+        .tiers = Get number of tiers
+        for .i from 1 to .tiers
+            .i_name$ = Get tier name: .i
+            if .i_name$ == .tier_name$
+                .tier_number = .i
+            endif
+        endfor
+
+        if .tier_number == -1
+            printline did not find a tier named '.tier_name$'
+            .annotation$ = undefined
+        else 
+            .annotation_interval = Get interval at time: .tier_number, .phone_mid
+            .annotation$ = Get label of interval... .tier_number .annotation_interval
+            # printline '.annotation$'
+        endif
+
+        fileappend 'outfile$' ,'.annotation$'
+    endif
+
+endproc
 
 #######################################################################################
 # PROCEDURE: erik_vot()
@@ -1353,8 +1405,6 @@ procedure erik_cpps (.argString$)
 
 endproc
 
-
-
 #######################################################################################
 # PROCEDURE: pvi()
 # make duration measurements and calculate Pairwise Variability Index
@@ -1375,6 +1425,7 @@ endproc
 procedure pvi (.argString$)
 
     .pauses$ = ""
+    .include_prepausal$ = "0"
 
     @parseArgs (.argString$)
     
@@ -1384,6 +1435,9 @@ procedure pvi (.argString$)
             .pauses$ = replace$(.pauses$, " ", ",", 0)
             .pauses$ = replace$(.pauses$, """", "", 0)
             .pauses$ = ","+.pauses$+","
+        if parseArgs.var$[.i] == "include_prepausal"
+            .include_prepausal$ = parseArgs.val$[.i]
+            .include_prepausal$ = replace$(.include_prepausal$, " ", ",", 0)
         elif parseArgs.var$[.i] != ""
             if isHeader == 1
                 .unknown_var$ = parseArgs.var$[.i]
@@ -1467,6 +1521,8 @@ procedure pvi (.argString$)
         endif
 
         if .prepausal == 0 and .last_nucleus_duration != undefined
+            .pvi = abs(.nucleus_duration - .last_nucleus_duration) / ((.nucleus_duration + .last_nucleus_duration)/2)
+        elif .prepausal == 1 and .last_nucleus_duration != undefined and (.include_prepausal == "1" or .include_prepausal == "yes")
             .pvi = abs(.nucleus_duration - .last_nucleus_duration) / ((.nucleus_duration + .last_nucleus_duration)/2)
         else
             .pvi = undefined
