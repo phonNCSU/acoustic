@@ -102,6 +102,14 @@ else
     printline    not including postvocalic liquids in vowels (default)
 endif
 
+if index (options$, "r") > 0
+    lv = 1
+    printline  * including PREVOCALIC liquids in vowels
+else
+    lv = 0
+    printline    not including postvocalic liquids in vowels (default)
+endif
+
 if index (options$, "f") > 0
     @functionwords
     excludedwords$ = functionwords$
@@ -249,6 +257,10 @@ if interactive_session == 1
 
     if vl==1
         @removeVLboundaries
+    endif
+
+    if lv==1
+        @removeLVboundaries
     endif
 
     select TextGrid 'textgrid_name$'
@@ -406,6 +418,9 @@ else
                 if vl==1
                     @removeVLboundaries
                 endif
+                if lv==1
+                    @removeLVboundaries
+                endif
 
             	@transport
 
@@ -454,6 +469,9 @@ else
         printline if you have more than one speaker, please list your files in a csv file with a "tier" column
         if vl==1
             @removeVLboundaries
+        endif
+        if lv==1
+            @removeLVboundaries
         endif
 
         @transport
@@ -982,6 +1000,11 @@ procedure handleWildcards
     phonefield$ = replace$(phonefield$, " VLSTR ", " IY1L IY2L EY1L EY2L OW1L OW2L UW1L UW2L IH1L IH2L EH1L EH2L AH1L AH2L AE1L AE2L AY1L AY2L AW1L AW2L AA1L AA2L AO1L AO2L OY1L OY2L UH1L UH2L ", 0)
     phonefield$ = replace$(phonefield$, " VRSTR ", " IY1R IY2R EY1R EY2R OW1R OW2R UW1R UW2R IH1R IH2R EH1R EH2R AH1R AH2R AE1R AE2R AY1R AY2R AW1R AW2R AA1R AA2R AO1R AO2R OY1R OY2R UH1R UH2R ", 0)
 
+    phonefield$ = replace$(phonefield$, " LV ", " LIY1 LIY2 LIY0 LEY1 LEY2 LEY0 LOW1 LOW2 LOW0 LUW1 LUW2 LUW0 LIH1 LIH2 LIH0 LEH1 LEH2 LEH0 LAH1 LAH2 LAH0 LAE1 LAE2 LAE0 LAY1 LAY2 LAY0 LAW1 LAW2 LAW0 LAA1 LAA2 LAA0 LAO1 LAO2 LAO0 LOY1 LOY2 LOY0 LUH1 LUH2 LUH0 ", 0)
+    phonefield$ = replace$(phonefield$, " RV ", " RIY1 RIY2 RIY0 REY1 REY2 REY0 ROW1 ROW2 ROW0 RUW1 RUW2 RUW0 RIH1 RIH2 RIH0 REH1 REH2 REH0 RAH1 RAH2 RAH0 RAE1 RAE2 RAE0 RAY1 RAY2 RAY0 RAW1 RAW2 RAW0 RAA1 RAA2 RAA0 RAO1 RAO2 RAO0 ROY1 ROY2 ROY0 RUH1 RUH2 RUH0 ", 0)
+    phonefield$ = replace$(phonefield$, " LVST ", " LIY1 LIY2 LEY1 LEY2 LOW1 LOW2 LUW1 LUW2 LIH1 LIH2 LEH1 LEH2 LAH1 LAH2 LAE1 LAE2 LAY1 LAY2 LAW1 LAW2 LAA1 LAA2 LAO1 LAO2 LOY1 LOY2 LUH1 LUH2 ", 0)
+    phonefield$ = replace$(phonefield$, " RVST ", " RIY1 RIY2 REY1 REY2 ROW1 ROW2 RUW1 RUW2 RIH1 RIH2 REH1 REH2 RAH1 RAH2 RAE1 RAE2 RAY1 RAY2 RAW1 RAW2 RAA1 RAA2 RAO1 RAO2 ROY1 ROY2 RUH1 RUH2 ", 0)
+
     ###FRENCH
     phonefield$ = replace$(phonefield$, " VOYELLES ", " VOYELLE ", 0)
     phonefield$ = replace$(phonefield$, " CONSONNES ", " CONSONNE ", 0)
@@ -1224,6 +1247,46 @@ procedure removeVLboundaries
                 if .nextphone_end <= .word_end
                     #printline REMOVING A BOUNDARY BETWEEN '.phone$' AND '.nextphone$' IN '.word$'
                     Remove right boundary... phone_tier .p
+                    .final_p_interval = .final_p_interval - 1
+                endif
+            endif
+        endif
+        
+        .p = .p + 1
+
+    endwhile
+endproc
+
+procedure removeLVboundaries
+
+    # remove word-internal post-liquid boundaries (HACK)
+
+    select TextGrid 'textgrid_name$'
+    .final_p_interval = Get number of intervals... phone_tier
+
+    #GO THROUGH PHONE INTERVALS ONE BY ONE
+    .p = 2
+    while .p < .final_p_interval
+
+        select TextGrid 'textgrid_name$'
+        .phone_start = Get starting point... phone_tier .p
+        .phone_end = Get end point... phone_tier .p
+        .phone_mid = (.phone_start+.phone_end)/2
+
+        .phone$ = Get label of interval... phone_tier .p
+        .lastphone$ = Get label of interval... phone_tier .p-1
+        .w = Get interval at time... word_tier .phone_mid
+        .word$ = Get label of interval... word_tier .w
+
+        .word_start = Get start point... word_tier .w
+        .lastphone_start = Get start point... phone_tier .p-1 
+
+        if index(.phone$, "0") > 0 or index(.phone$, "1") > 0 or index(.phone$, "2") > 0
+            if .lastphone$ == "L" or .lastphone$ == "R" or .lastphone$ == "r" or .lastphone$ == "l" or .lastphone$ == "ɻ" or .lastphone$ == "ɽ" or .lastphone$ == "ɾ" or .lastphone$ == "ɭ"
+                #printline '.phone$' '.nextphone$' '.nextphone_end' '.word_end'
+                if .lastphone_start >= .word_start
+                    # printline REMOVING A BOUNDARY BETWEEN '.lastphone$' AND '.phone$' IN '.word$'
+                    Remove left boundary... phone_tier .p
                     .final_p_interval = .final_p_interval - 1
                 endif
             endif
@@ -1936,6 +1999,8 @@ endproc
 
 
 
+<<<<<<< HEAD
+=======
 
 
 
@@ -1997,5 +2062,6 @@ endproc
 
 
 
+>>>>>>> 2f65283dc18afc74c5d4f4fa6097dffd9e6abb93
 #including procedures on line 2001 so that error messages will be more informative (subtract 2000 from the line number to find the line in the procedures file)
 include one_script_procedures_dev.praat
