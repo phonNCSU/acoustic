@@ -1572,7 +1572,7 @@ procedure pvi (.argString$)
 
         if .prepausal == 0 and .last_nucleus_duration != undefined
             .pvi = abs(.nucleus_duration - .last_nucleus_duration) / ((.nucleus_duration + .last_nucleus_duration)/2)
-        elif .prepausal == 1 and .last_nucleus_duration != undefined and (.include_prepausal == "1" or .include_prepausal == "yes")
+        elif .prepausal == 1 and .last_nucleus_duration != undefined and (.include_prepausal$ == "1" or .include_prepausal$ == "yes")
             .pvi = abs(.nucleus_duration - .last_nucleus_duration) / ((.nucleus_duration + .last_nucleus_duration)/2)
         else
             .pvi = undefined
