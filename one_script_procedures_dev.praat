@@ -1479,7 +1479,7 @@ procedure pvi (.argString$)
             .pauses$ = replace$(.pauses$, " ", ",", 0)
             .pauses$ = replace$(.pauses$, """", "", 0)
             .pauses$ = ","+.pauses$+","
-        if parseArgs.var$[.i] == "include_prepausal"
+        elif parseArgs.var$[.i] == "include_prepausal"
             .include_prepausal$ = parseArgs.val$[.i]
             .include_prepausal$ = replace$(.include_prepausal$, " ", ",", 0)
         elif parseArgs.var$[.i] != ""
@@ -1490,19 +1490,23 @@ procedure pvi (.argString$)
         endif
     endfor
 
+    .info_message$ = "Be advised that the pvi() procedure now includes prepausal feet by default. You can filter them out later using the prepausal and break_duration columns of the output, or you can exclude them with pvi(include_prepausal=0)"
+
     .pvi_breaks$ = breaks$ + .pauses$
 
     if isHeader = 1 
-        fileappend 'outfile$' ,nucleus,vowel_duration,nucleus_duration,last_nucleus_duration,pvi,word_duration,n_phones,syllables,feet,stress,last_stress,stress_pattern,final,prepausal
+        fileappend 'outfile$' ,nucleus,vowel_duration,nucleus_duration,last_nucleus_duration,pvi,word_duration,n_phones,syllables,feet,stress,last_stress,stress_pattern,final,prepausal,break_duration
 
         phonefield$ = "COR"
         call handleWildcards
         .coronals$ = phonefield$
         .last_nucleus_duration = undefined
         .last_stress$ = "--undefined--"
+        printline '.info_message$'
         
     elif isComplete == 1
-        printline FINISHED  
+        printline FINISHED
+        printline '.info_message$'
     else
 
         .vowel_duration = transport.phone_end - transport.phone_start
@@ -1560,8 +1564,10 @@ procedure pvi (.argString$)
         if index(.pvi_breaks$, ","+transport.nextword$+",") > 0 and (index (.vs_after$, "1") + index (.vs_after$, "2") == 0)
             #printline found break: 'transport.nextword$'
             .prepausal = 1
+            .break_duration = transport.nextword_end - transport.word_end
         else
             .prepausal = 0
+            .break_duration = 0
         endif
 
         if .prepausal == 0 and .last_nucleus_duration != undefined
@@ -1572,7 +1578,7 @@ procedure pvi (.argString$)
             .pvi = undefined
         endif
 
-        fileappend 'outfile$' ,'.nucleus$','.vowel_duration:3','.nucleus_duration:3','.last_nucleus_duration:3','.pvi:3','.word_duration:3','.n_phones','.n_syllables','.n_feet','.stress$','.last_stress$','.stress_pattern$','.final','.prepausal'
+        fileappend 'outfile$' ,'.nucleus$','.vowel_duration:3','.nucleus_duration:3','.last_nucleus_duration:3','.pvi:3','.word_duration:3','.n_phones','.n_syllables','.n_feet','.stress$','.last_stress$','.stress_pattern$','.final','.prepausal','.break_duration'
 
         if .prepausal == 1
             .last_nucleus_duration = undefined
