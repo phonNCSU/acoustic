@@ -1352,7 +1352,7 @@ procedure annotation_tier (.argString$)
         else 
             .annotation_interval = Get interval at time: .tier_number, .phone_mid
             .annotation$ = Get label of interval... .tier_number .annotation_interval
-            # printline '.annotation$'
+            printline '.annotation$'
         endif
 
         fileappend 'outfile$' ,'.annotation$'
