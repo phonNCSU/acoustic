@@ -1215,7 +1215,7 @@ procedure check_words (.argString$)
         .all_phones$ = ""
 
         for .i from .first_interval to .last_interval
-            .phone$ = Get label of interval: phone_tier .i
+            .phone$ = Get label of interval: phone_tier, .i
             .all_phones$ = .all_phones$ + .phone$
         endfor
 
