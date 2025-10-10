@@ -1203,14 +1203,14 @@ procedure check_words (.argString$)
     elif isComplete == 1
         printline FINISHED  
     else
-        .first_interval = Get interval at time: phone_tier, transport.wordstart
-        .last_interval = Get interval at time: phone_tier, transport.wordend
+        .first_interval = Get interval at time: phone_tier, transport.word_start
+        .last_interval = Get interval at time: phone_tier, transport.word_end
 
         .first_interval_start = Get start time of interval: phone_tier .first_interval
         .last_interval_end = Get end time of interval: phone_tier .last_interval
 
-        .start_match = .first_interval_start == transport.wordstart
-        .end_match = .last_interval_end == transport.wordend
+        .start_match = .first_interval_start == transport.word_start
+        .end_match = .last_interval_end == transport.word_end
 
         .all_phones$ = ""
 
