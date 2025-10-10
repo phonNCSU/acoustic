@@ -1184,7 +1184,7 @@ endproc
 # EXAMPLE: 'check_words()'
 #######################################################################################
 
-procedure word_duration (.argString$)
+procedure check_words (.argString$)
 
     @parseArgs (.argString$)
     
