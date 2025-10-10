@@ -1176,6 +1176,59 @@ procedure word_duration (.argString$)
 
 endproc
 
+
+#######################################################################################
+# PROCEDURE: check_words()
+# check word segmentation by showing the phones overlapping the word and checking boundary alignment
+#
+# EXAMPLE: 'check_words()'
+#######################################################################################
+
+procedure word_duration (.argString$)
+
+    @parseArgs (.argString$)
+    
+    for i to parseArgs.n_args
+        if parseArgs.var$[i] != ""
+            if isHeader == 1
+                .unknown_var$ = parseArgs.var$[i]
+                printline skipped unknown argument '.unknown_var$'
+            endif
+        endif
+    endfor
+
+    if isHeader = 1 
+        printline duration('.argString$')
+        fileappend 'outfile$' ,start_match,end_match,all_phones
+    elif isComplete == 1
+        printline FINISHED  
+    else
+        .first_interval = Get interval at time: phone_tier, transport.wordstart
+        .last_interval = Get interval at time: phone_tier, transport.wordend
+
+        .first_interval_start = Get start time of interval: phone_tier .first_interval
+        .last_interval_end = Get end time of interval: phone_tier .last_interval
+
+        .start_match = .first_interval_start == transport.wordstart
+        .end_match = .last_interval_end == transport.wordend
+
+        .all_phones$ = ""
+
+        for .i from .first_interval to .last_interval
+            .phone$ = Get label of interval: phone_tier .i
+            .all_phones$ = .all_phones$ + .phone$
+        endfor
+
+        .all_phones$ = """" + .all_phones$ + """"
+
+        fileappend 'outfile$' ,'.start_match','.end_match','.all_phones$'
+    endif
+
+endproc
+
+
+
+
 #######################################################################################
 # PROCEDURE: context()
 # output the target words in the context of a particular number of preceding and following words 
