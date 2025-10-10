@@ -1203,8 +1203,8 @@ procedure check_words (.argString$)
     elif isComplete == 1
         printline FINISHED  
     else
-        .first_interval = Get interval at time: phone_tier, transport.word_start
-        .last_interval = Get interval at time: phone_tier, transport.word_end
+        .first_interval = Get interval at time: phone_tier, transport.word_start+0.001
+        .last_interval = Get interval at time: phone_tier, transport.word_end-0.001
 
         .first_interval_start = Get start time of interval: phone_tier, .first_interval
         .last_interval_end = Get end time of interval: phone_tier, .last_interval
