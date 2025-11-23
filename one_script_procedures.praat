@@ -401,6 +401,7 @@ procedure clips (.argString$)
     .filtering = 0
     .sanitize = 1
     .scale_peak = 0
+    .spectrograms = 0
 
     for i to parseArgs.n_args
         x$ = parseArgs.var$[i]
@@ -418,6 +419,8 @@ procedure clips (.argString$)
             .sanitize = number(parseArgs.val$[i])
         elif parseArgs.var$[i] == "scale"
             .scale_peak = number(parseArgs.val$[i])
+        elif parseArgs.var$[i] == "spectrograms"
+            .spectrograms = number(parseArgs.val$[i])
         elif parseArgs.var$[i] == "categories"
             # pass
         elif parseArgs.var$[i] == "trigrams"
@@ -438,6 +441,16 @@ procedure clips (.argString$)
         fileappend 'outfile$' ,clip_start,clip_end,stimulus
     elif isComplete == 1
         printline FINISHED  
+
+        if .spectrograms == 1
+            .pdfunite_command$ = "pdfunite "+clipPath$+"/*.pdf clips_"+datestamp$+".pdf"
+            printline #####################################
+            printline Created individual spectrogram pdfs. Combine to one pdf with this command:
+            printline '.pdfunite_command$'             
+            printline #####################################
+        endif
+
+
     else
         select Sound 'sound_name$'
         .clip_start = round(1000*(transport.word_start - .pad))/1000
@@ -446,7 +459,7 @@ procedure clips (.argString$)
         .original_rate = Get sampling frequency
         #printline '.original_rate' '.rate'
         if .original_rate != .rate
-            printline resampling 'sound_name$' to '.rate' Hz
+            # printline resampling 'sound_name$' to '.rate' Hz
             Resample: .rate, 50
             selectObject: "Sound 'sound_name$'_part"
             Remove
@@ -484,6 +497,37 @@ procedure clips (.argString$)
         selectObject: "TextGrid 'textgrid_name$'"
         Extract part: .clip_start, .clip_end, "no"
         Save as text file: "'clipPath$'/'.sound_filename$'.TextGrid"
+        ###################################################
+
+        # THIS IS TO SAVE SPECTROGRAMS TOO ################
+        if .spectrograms == 1
+            Erase all
+
+            .token_label_no_underscores$ = replace$(token_id$, "_", " ", 0)
+            #printline '.token_label_no_underscores$'
+
+            selectObject: "Sound "+sound_name$+"_part"
+            To Spectrogram: 0.005, 5000, 0.002, 20, "Gaussian"
+
+            Select outer viewport: 0, 6, 0.5, 3.5
+            Paint: 0, 0, 0, 0, 100, "yes", 50, 6, 0, "yes"
+            Text: .clip_start, "left", 5300, "half", .token_label_no_underscores$
+
+            selectObject: "TextGrid "+textgrid_name$
+            plusObject: "Sound "+sound_name$
+            Select outer viewport: 0, 6, 3.5, 5.5
+            Draw: .clip_start, .clip_end, "yes", "yes", "yes"
+
+            Select outer viewport: 0, 6, 0, 6
+            Save as PDF file: clipPath$+"/"+.sound_filename$+".pdf"
+
+            selectObject: "Spectrogram "+sound_name$+"_part"
+            Remove
+        endif
+        ###################################################
+
+        ###################################################
+        selectObject: "TextGrid 'textgrid_name$'_part"
         Remove
         ###################################################
 
@@ -1132,6 +1176,63 @@ procedure word_duration (.argString$)
 
 endproc
 
+
+#######################################################################################
+# PROCEDURE: check_words()
+# check word segmentation by showing the phones overlapping the word and checking boundary alignment
+#
+# EXAMPLE: 'check_words()'
+#######################################################################################
+
+procedure check_words (.argString$)
+
+    @parseArgs (.argString$)
+    
+    for i to parseArgs.n_args
+        if parseArgs.var$[i] != ""
+            if isHeader == 1
+                .unknown_var$ = parseArgs.var$[i]
+                printline skipped unknown argument '.unknown_var$'
+            endif
+        endif
+    endfor
+
+    if isHeader = 1 
+        printline duration('.argString$')
+        fileappend 'outfile$' ,start_match,end_match,all_phones
+    elif isComplete == 1
+        printline FINISHED  
+    else
+        .first_interval = Get interval at time: phone_tier, transport.word_start+0.001
+        .last_interval = Get interval at time: phone_tier, transport.word_end-0.001
+
+        .first_interval_start = Get start time of interval: phone_tier, .first_interval
+        .last_interval_end = Get end time of interval: phone_tier, .last_interval
+
+        .start_match = .first_interval_start == transport.word_start
+        .end_match = .last_interval_end == transport.word_end
+
+        .all_phones$ = ""
+
+        for .i from .first_interval to .last_interval
+            .phone$ = Get label of interval: phone_tier, .i
+            if .all_phones$ == ""
+                .all_phones$ = .all_phones$ + .phone$
+            else
+                .all_phones$ = .all_phones$ + "," + .phone$
+            endif
+        endfor
+
+        .all_phones$ = """" + .all_phones$ + """"
+
+        fileappend 'outfile$' ,'.start_match','.end_match','.all_phones$'
+    endif
+
+endproc
+
+
+
+
 #######################################################################################
 # PROCEDURE: context()
 # output the target words in the context of a particular number of preceding and following words 
@@ -1263,6 +1364,58 @@ procedure tier3 (.argString$)
 
 endproc
 
+#######################################################################################
+# PROCEDURE: annotation_tier()
+# include an annotation from a tier specified by name
+#
+# EXAMPLE: 'annotation_tier(tier_name=phrase)' [record the label of an interval in a phrase tier]
+#######################################################################################
+
+procedure annotation_tier (.argString$)
+
+    @parseArgs (.argString$)
+    
+    for .i to parseArgs.n_args
+        if parseArgs.var$[.i] == "tier_name"
+            .tier_name$ = parseArgs.val$[.i]
+        elif parseArgs.var$[.i] != ""
+            if isHeader == 1
+                .unknown_var$ = parseArgs.var$[.i]
+                printline skipped unknown argument '.unknown_var$'
+            endif
+        endif
+    endfor
+
+    if isHeader = 1 
+        printline annotation_tier('.argString$')
+        fileappend 'outfile$' ,'.tier_name$'
+    elif isComplete == 1
+        printline FINISHED  
+    else
+        select TextGrid 'textgrid_name$'
+        .phone_mid = transport.phone_start + (transport.duration / 2)
+        .tier_number = -1
+        .tiers = Get number of tiers
+        for .i from 1 to .tiers
+            .i_name$ = Get tier name: .i
+            if .i_name$ == .tier_name$
+                .tier_number = .i
+            endif
+        endfor
+
+        if .tier_number == -1
+            printline did not find a tier named '.tier_name$'
+            .annotation$ = undefined
+        else 
+            .annotation_interval = Get interval at time: .tier_number, .phone_mid
+            .annotation$ = Get label of interval... .tier_number .annotation_interval
+            printline '.annotation$'
+        endif
+
+        fileappend 'outfile$' ,'.annotation$'
+    endif
+
+endproc
 
 #######################################################################################
 # PROCEDURE: erik_vot()
@@ -1353,8 +1506,6 @@ procedure erik_cpps (.argString$)
 
 endproc
 
-
-
 #######################################################################################
 # PROCEDURE: pvi()
 # make duration measurements and calculate Pairwise Variability Index
@@ -1369,21 +1520,50 @@ endproc
 #  - intermediate phrases (often just drop/rise in pitch that isn't otherwise accounted for)
 #
 # EXAMPLE: 'pvi()'
+# EXAMPLE: 'pvi(pauses="um uh")'
 #######################################################################################
 
 procedure pvi (.argString$)
 
+    .pauses$ = ""
+    .include_prepausal$ = "0"
+
+    @parseArgs (.argString$)
+    
+    for .i to parseArgs.n_args
+        if parseArgs.var$[.i] == "pauses"
+            .pauses$ = parseArgs.val$[.i]
+            .pauses$ = replace$(.pauses$, " ", ",", 0)
+            .pauses$ = replace$(.pauses$, """", "", 0)
+            .pauses$ = ","+.pauses$+","
+        elif parseArgs.var$[.i] == "include_prepausal"
+            .include_prepausal$ = parseArgs.val$[.i]
+            .include_prepausal$ = replace$(.include_prepausal$, " ", ",", 0)
+        elif parseArgs.var$[.i] != ""
+            if isHeader == 1
+                .unknown_var$ = parseArgs.var$[.i]
+                printline skipped unknown argument '.unknown_var$'
+            endif
+        endif
+    endfor
+
+    .info_message$ = "Be advised that the pvi() procedure now includes prepausal feet by default. You can filter them out later using the prepausal and break_duration columns of the output, or you can exclude them with pvi(include_prepausal=0)"
+
+    .pvi_breaks$ = breaks$ + .pauses$
+
     if isHeader = 1 
-        fileappend 'outfile$' ,nucleus,vowel_duration,nucleus_duration,last_nucleus_duration,pvi,word_duration,n_phones,syllables,feet,stress,last_stress,stress_pattern,final,prepausal
+        fileappend 'outfile$' ,nucleus,vowel_duration,nucleus_duration,last_nucleus_duration,pvi,word_duration,n_phones,syllables,feet,stress,last_stress,stress_pattern,final,prepausal,break_duration
 
         phonefield$ = "COR"
         call handleWildcards
         .coronals$ = phonefield$
         .last_nucleus_duration = undefined
         .last_stress$ = "--undefined--"
-
+        printline '.info_message$'
+        
     elif isComplete == 1
-        printline FINISHED  
+        printline FINISHED
+        printline '.info_message$'
     else
 
         .vowel_duration = transport.phone_end - transport.phone_start
@@ -1437,20 +1617,25 @@ procedure pvi (.argString$)
         .n_syllables = length (.stress_pattern$)
 
         .n_feet = length (replace$(.stress_pattern$, "0", "", 0))
-
-        if index(breaks$, ","+transport.nextword$+",") > 0 and (index (.vs_after$, "1") + index (.vs_after$, "2") == 0)
+        #printline '.pvi_breaks$'
+        if index(.pvi_breaks$, ","+transport.nextword$+",") > 0 and (index (.vs_after$, "1") + index (.vs_after$, "2") == 0)
+            #printline found break: 'transport.nextword$'
             .prepausal = 1
+            .break_duration = transport.nextword_end - transport.word_end
         else
             .prepausal = 0
+            .break_duration = 0
         endif
 
         if .prepausal == 0 and .last_nucleus_duration != undefined
+            .pvi = abs(.nucleus_duration - .last_nucleus_duration) / ((.nucleus_duration + .last_nucleus_duration)/2)
+        elif .prepausal == 1 and .last_nucleus_duration != undefined and (.include_prepausal$ == "1" or .include_prepausal$ == "yes")
             .pvi = abs(.nucleus_duration - .last_nucleus_duration) / ((.nucleus_duration + .last_nucleus_duration)/2)
         else
             .pvi = undefined
         endif
 
-        fileappend 'outfile$' ,'.nucleus$','.vowel_duration:3','.nucleus_duration:3','.last_nucleus_duration:3','.pvi:3','.word_duration:3','.n_phones','.n_syllables','.n_feet','.stress$','.last_stress$','.stress_pattern$','.final','.prepausal'
+        fileappend 'outfile$' ,'.nucleus$','.vowel_duration:3','.nucleus_duration:3','.last_nucleus_duration:3','.pvi:3','.word_duration:3','.n_phones','.n_syllables','.n_feet','.stress$','.last_stress$','.stress_pattern$','.final','.prepausal','.break_duration'
 
         if .prepausal == 1
             .last_nucleus_duration = undefined
@@ -1893,7 +2078,8 @@ procedure nasalization (.argString$)
         printline FINISHED  
 
     else
-        .ltas_bandwidth = ceiling(sound_samplerate/2048)
+        .ltas_bandwidth = ceiling(sound_samplerate/2048) # changed 2025/09/16
+        .ltas_bandwidth = ceiling(sound_samplerate/1024)
         
         if .lastphone$ == "yes" or .lastphone$ == "true"
             .first_measure = transport.lastphone_start
