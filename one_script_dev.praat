@@ -303,188 +303,174 @@ else
     #BATCH
     #Read Table in and Get File Locations
 
-    if index (file_list$, ";") == 0
-        #OPENING FILES LISTED IN A CSV FILE
+    if index (file_list$, ";") > 0
+        printline FILELIST
+        ### SPLIT BY SEMICOLON
+        @split (";", file_list$)
 
-        if index (file_list$, ":") > 0
-            @split (":", file_list$)
-            file_list$ = split.array$[1]
-            starting_row = number(split.array$[2])
-            if split.length > 2
-                ending_row = number(split.array$[3])
-            else
-                ending_row = 0
-            endif
+        wav_file$ = split.array$[1]
+        tg_file$ = split.array$[2]
+        if split.length > 2
+            phone_tier = 'split.array$[3]'
         else
-            starting_row = 1
+            phone_tier = 2
+        endif
+
+
+        Create Table with column names: "filelist", 1, { "speaker", "tier", "wav", "textgrid" }
+        Set string value: 1, "speaker", "unknown_speaker"
+        Set numeric value: 1, "tier", phone_tier
+        Set string value: 1, "wav", wav_file$
+        Set string value: 1, "textgrid", tg_file$
+
+        file_list$ = writePath$+"one_script_filelist.csv"
+        Save as comma-separated file: file_list$
+
+        printline ######################################################
+        printline created csv file list which you can modify and use from
+        printline now on instead of listing files directly in the query
+        printline (check speaker name and phone tier):
+        printline 'file_list$'
+        printline ######################################################
+
+    endif
+
+
+
+    #OPENING FILES LISTED IN A CSV FILE
+
+    if index (file_list$, ":") > 0
+        @split (":", file_list$)
+        file_list$ = split.array$[1]
+        starting_row = number(split.array$[2])
+        if split.length > 2
+            ending_row = number(split.array$[3])
+        else
             ending_row = 0
         endif
+    else
+        starting_row = 1
+        ending_row = 0
+    endif
 
-        Read Table from comma-separated file... 'file_list$'
-        Rename... file_list
-        data_rows = Get number of rows
-        
-        starting_row = max(starting_row, 1)
 
-        if ending_row == 0 or ending_row > data_rows
-            ending_row = data_rows
-        endif
 
-        if starting_row > 1 or ending_row < data_rows
-            printline (Processing rows 'starting_row'-'ending_row' out of 'data_rows' total rows)
-            actual_data_rows = ending_row - starting_row + 1
+
+    Read Table from comma-separated file... 'file_list$'
+    Rename... file_list
+    data_rows = Get number of rows
+    
+    starting_row = max(starting_row, 1)
+
+    if ending_row == 0 or ending_row > data_rows
+        ending_row = data_rows
+    endif
+
+    if starting_row > 1 or ending_row < data_rows
+        printline (Processing rows 'starting_row'-'ending_row' out of 'data_rows' total rows)
+        actual_data_rows = ending_row - starting_row + 1
+    else
+        actual_data_rows = data_rows
+    endif
+
+    #Iterate over files in list and make measurements
+    for data_row to data_rows
+
+        if data_row < starting_row or data_row > ending_row
+            printline -----Skipping 'data_row' of 'data_rows'
         else
-            actual_data_rows = data_rows
-        endif
+            @readTableRow
 
-        #Iterate over files in list and make measurements
-        for data_row to data_rows
+            printline *****Processing 'textgrid_name$': 'data_row' of 'data_rows'
 
-            if data_row < starting_row or data_row > ending_row
-                printline -----Skipping 'data_row' of 'data_rows'
-            else
-                @readTableRow
+            #Read from file... 'wav_file$'
+            #Rename... 'sound_name$'
+            #wav_duration = Get total duration
+            #total_duration = total_duration + wav_duration
+            #sound_samplerate = Get sampling frequency
+            wav_is_open = 0
 
-                printline *****Processing 'textgrid_name$': 'data_row' of 'data_rows'
+            Read from file... 'tg_file$'
+            Rename... 'textgrid_name$'
 
-                #Read from file... 'wav_file$'
-                #Rename... 'sound_name$'
-                #wav_duration = Get total duration
-                #total_duration = total_duration + wav_duration
-                #sound_samplerate = Get sampling frequency
-                wav_is_open = 0
+            textgrid_tiers = Get number of tiers
+            all_phone_tiers$ = " "
+            all_word_tiers$ = " "
+            for i from 1 to textgrid_tiers
+                tiername$ = Get tier name: i
+                if index (tiername$, "phone") > 0 or index (tiername$, "Phone") > 0
+                    all_phone_tiers$ = all_phone_tiers$+"'i' "
+                endif
+                if index (tiername$, "word") > 0 or index (tiername$, "Word") > 0
+                    all_word_tiers$ = all_word_tiers$+"'i' "
+                endif
+            endfor
+            #printline word tiers: 'all_word_tiers$'
 
-                Read from file... 'tg_file$'
-                Rename... 'textgrid_name$'
+            tieronename$ = Get tier name: 1
+            tiertwoname$ = Get tier name: 2
 
-                textgrid_tiers = Get number of tiers
-                all_phone_tiers$ = " "
-                all_word_tiers$ = " "
-                for i from 1 to textgrid_tiers
-                    tiername$ = Get tier name: i
-                    if index (tiername$, "phone") > 0 or index (tiername$, "Phone") > 0
-                        all_phone_tiers$ = all_phone_tiers$+"'i' "
-                    endif
-                    if index (tiername$, "word") > 0 or index (tiername$, "Word") > 0
-                        all_word_tiers$ = all_word_tiers$+"'i' "
+            if phone_tier == 0
+                tg_tiers = Get number of tiers
+                for tiernumber from 1 to tg_tiers
+                    tiername$ = Get tier name: tiernumber
+                    if tiername$ == speaker$+" - phones" or tiername$ == speaker$+" - phone"
+                        phone_tier = tiernumber
+                        printline ...found phone tier 'tiername$' ('phone_tier')
+                    elif tiername$ == speaker$+" - words" or tiername$ == speaker$+" - word"
+                        word_tier = tiernumber
+                        printline ...found word tier 'tiername$' ('word_tier')
                     endif
                 endfor
-                #printline word tiers: 'all_word_tiers$'
 
-                tieronename$ = Get tier name: 1
-                tiertwoname$ = Get tier name: 2
-
-                if phone_tier == 0
-                    tg_tiers = Get number of tiers
-                    for tiernumber from 1 to tg_tiers
-                        tiername$ = Get tier name: tiernumber
-                        if tiername$ == speaker$+" - phones" or tiername$ == speaker$+" - phone"
-                            phone_tier = tiernumber
-                            printline ...found phone tier 'tiername$' ('phone_tier')
-                        elif tiername$ == speaker$+" - words" or tiername$ == speaker$+" - word"
-                            word_tier = tiernumber
-                            printline ...found word tier 'tiername$' ('word_tier')
-                        endif
-                    endfor
-
-                    #if index (tieronename$, "ord") > 0 and index (tiertwoname$, "hone") > 0
-                    #    phone_tier = 2
-                    #    word_tier = 1
-                    #    printline word tier is 1 and phone tier is 2
-                    #else
-                    #    phone_tier = 1
-                    #    word_tier = 2
-                    #    printline word tier is 2 and phone tier is 1
-                    #endif
+                #if index (tieronename$, "ord") > 0 and index (tiertwoname$, "hone") > 0
+                #    phone_tier = 2
+                #    word_tier = 1
+                #    printline word tier is 1 and phone tier is 2
+                #else
+                #    phone_tier = 1
+                #    word_tier = 2
+                #    printline word tier is 2 and phone tier is 1
+                #endif
+            else
+                if index (tieronename$, "ord") > 0 and index (tiertwoname$, "hone") > 0
+                    word_tier = phone_tier - 1
+                    printline word tier is above phone tier
                 else
-                    if index (tieronename$, "ord") > 0 and index (tiertwoname$, "hone") > 0
-                        word_tier = phone_tier - 1
-                        printline word tier is above phone tier
-                    else
-                        word_tier = phone_tier + 1
-                        printline word tier is below phone tier
-                    endif
-                # else
-                #    phone_tier = Get value... 'data_row' tier
+                    word_tier = phone_tier + 1
+                    printline word tier is below phone tier
                 endif
-                # word_tier = phone_tier + add_for_word_tier
-
-                if phone_tier == 0
-                    printline defaulting to word/phone tier = 1/2
-                    word_tier = 1
-                    phone_tier = 2
-                endif
-
-                if vl==1
-                    @removeVLboundaries
-                endif
-                if lv==1
-                    @removeLVboundaries
-                endif
-
-            	@transport
-
-                printline
-
-                select TextGrid 'textgrid_name$'
-                if wav_is_open
-            	   plus Sound 'sound_name$'
-                endif
-
-            	Remove
+            # else
+            #    phone_tier = Get value... 'data_row' tier
             endif
-        endfor
-    else
-        #OPENING A PAIR OF FILES NAMED IN THE one_script CALL
-        @openPairOfFiles
-        #THIS IS COPIED FROM RIGHT ABOVE
+            # word_tier = phone_tier + add_for_word_tier
 
-        if right$(wav_file$,3) == "MTS"
-            printline not opening wav file (because only an MTS file was given)
-            wav_duration = 0
-            total_duration = 0
-            sound_samplerate = 0
-        else
-            Read from file... 'wav_file$'
-            wav_is_open = 1
-            Rename... 'sound_name$'
-            wav_duration = Get total duration
-            total_duration = total_duration + wav_duration
-            sound_samplerate = Get sampling frequency
+            if phone_tier == 0
+                printline defaulting to word/phone tier = 1/2
+                word_tier = 1
+                phone_tier = 2
+            endif
+
+            if vl==1
+                @removeVLboundaries
+            endif
+            if lv==1
+                @removeLVboundaries
+            endif
+
+        	@transport
+
+            printline
+
+            select TextGrid 'textgrid_name$'
+            if wav_is_open
+        	   plus Sound 'sound_name$'
+            endif
+
+        	Remove
         endif
-
-        Read from file... 'tg_file$'
-        Rename... 
-
-        tieronename$ = Get tier name: 1
-        tiertwoname$ = Get tier name: 2
-        if index (tieronename$, "ord") > 0 and index (tiertwoname$, "hone") > 0
-            word_tier = 1
-            phone_tier = 2
-        else
-            word_tier = 2
-            phone_tier = 1
-        endif
-        printline word tier is 'word_tier' and phone tier is 'phone_tier'
-        printline if you have more than one speaker, please list your files in a csv file with a "tier" column
-        if vl==1
-            @removeVLboundaries
-        endif
-        if lv==1
-            @removeLVboundaries
-        endif
-
-        @transport
-
-        printline
-
-        select TextGrid 'textgrid_name$'
-        if right$(wav_file$,3) != "MTS"
-            plus Sound 'sound_name$'
-        endif
-        Remove
-        data_rows = 1
-    endif
+    endfor
+   
 
     isComplete = 1
     @makeMeasurements
@@ -581,54 +567,6 @@ procedure readTableRow
     else
        csv_pitch_ceiling = Get value... 'data_row' pitch_ceiling
     endif
-
-endproc
-
-procedure openPairOfFiles
-
-    ### SPLIT BY SEMICOLON
-    @split (";", file_list$)
-
-    wav_file$ = split.array$[1]
-    tg_file$ = split.array$[2]
-    if split.length > 2
-        phone_tier = 'split.array$[3]'
-    else
-        phone_tier = 1
-    endif
-
-    printline Processing a pair of files without a table:
-    # printline wav file is 'wav_file$', textgrid file is 'tg_file$', and phone_tier is 'phone_tier'
-    printline wav file is 'wav_file$', textgrid file is 'tg_file$', and phones and words are in tiers 1 and 2 (in some order)
-    printline Assuming speaker = textgrid name, gender = female (probably does not matter)
-
-    gender$ = "female"
-
-    # tieronename$ = Get tier name: 1
-    # tiertwoname$ = Get tier name: 2
-    # if index (tieronename$, "word") > 0 and index (tiertwoname$, "phone") > 0
-    #     phone_tier = 2
-    #     word_tier = 1
-    # else:
-    #     phone_tier = 1
-    #     word_tier = 2
-    # endif
-
-    # word_tier = phone_tier + add_for_word_tier
-    
-    @split ("/", wav_file$)
-    sound_name$ = split.array$[split.length] - ".wav"
-
-    @split ("/", tg_file$)
-    textgrid_name$ = split.array$[split.length] - ".TextGrid" - ".textgrid" - ".Textgrid"
-
-    speaker$ = textgrid_name$
-
-    #to handle filenames with "." in them...
-    sound_name$ = replace$(sound_name$, ".", "_", 0)
-    textgrid_name$ = replace$(textgrid_name$, ".", "_", 0)
-
-    video_file$ = wav_file$
 
 endproc
 
@@ -1042,15 +980,15 @@ procedure handleWildcards
     phonefield$ = replace$(phonefield$, " VOCALE_BK ", " u o ", 0)
     #
     phonefield$ = replace$(phonefield$, " CONSONANTE ", " CONSONANTE_STOP CONSONANTE_NAS CONSONANTE_FRIC CONSONANTE_APPROX CONSONANTE_RHOT ", 0)
-    phonefield$ = replace$(phonefield$, " CONSONANTE_STOP ", " p t k b d g ", 0)
-    phonefield$ = replace$(phonefield$, " CONSONANTE_NAS ", " m n NY ", 0)
+    phonefield$ = replace$(phonefield$, " CONSONANTE_STOP ", " p t k b β d d̪ ð g ɣ ", 0)
+    phonefield$ = replace$(phonefield$, " CONSONANTE_NAS ", " m n NY ɲ ", 0)
     phonefield$ = replace$(phonefield$, " CONSONANTE_FRIC ", " f s x ", 0)
-    phonefield$ = replace$(phonefield$, " CONSONANTE_APPROX ", " l y ", 0)
-    phonefield$ = replace$(phonefield$, " CONSONANTE_RHOT ", " R r ", 0)
+    phonefield$ = replace$(phonefield$, " CONSONANTE_APPROX ", " l y j ", 0)
+    phonefield$ = replace$(phonefield$, " CONSONANTE_RHOT ", " R r ɾ ", 0)
     #
     phonefield$ = replace$(phonefield$, " CONSONANTE_VLS_OBS ", " p t k f s x CH ", 0)
-    phonefield$ = replace$(phonefield$, " CONSONANTE_VCD_OBS ", " b d g R r ", 0)
-    phonefield$ = replace$(phonefield$, " CONSONANTE_SON ", " l m n NY y ", 0)
+    phonefield$ = replace$(phonefield$, " CONSONANTE_VCD_OBS ", " b β d d̪ ð g ɣ ", 0)
+    phonefield$ = replace$(phonefield$, " CONSONANTE_SON ", " l m n NY ɲ y j R r ɾ ", 0)
 
     ###VOWEL STRESS
     phonefield$ = replace$(phonefield$, " STR ", " IY1 IH1 IR1 EY1 EYR1 EH1 AH1 AE1 AY1 AW1 AA1 AAR1 AO1 OW1 OY1 OR1 ER1 UH1 UW1 UR1 ", 0)
@@ -1627,6 +1565,7 @@ procedure transport
 
                     .overlapping_speech$ = ""
                     select TextGrid 'textgrid_name$'
+                    textgrid_tiers = Get number of tiers
                     for .i from 1 to textgrid_tiers
                         #if .i != phone_tier and index (all_phone_tiers$, " '.i' ") > 0
                         if .i != word_tier and index (all_word_tiers$, " '.i' ") > 0
@@ -1664,6 +1603,67 @@ procedure transport
     endfor
 
 endproc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
